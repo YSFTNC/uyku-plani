@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Uyku Planı</title>
+<meta name="description" content="Dersin kaçta? Yatış saatini ve alarmlarını hesaplar.">
+<meta name="theme-color" content="#12112A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Uyku Planı">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg-1: #12112A;
+    --bg-2: #1F1C42;
+    --bg-3: #2C2456;
+    --lavender: #C8B6FF;
+    --peach: #FFC6B3;
+    --mint: #B5EAD7;
+    --sky: #A9D6FF;
+    --butter: #FFE8A3;
+    --ink: #1B1838;
+    --card: rgba(255, 255, 255, .06);
+    --stroke: rgba(255, 255, 255, .08);
+    --text: rgba(255, 255, 255, .92);
+    --muted: rgba(255, 255, 255, .55);
+    --radius: 26px;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; }
+
+  body {
+    min-height: 100dvh;
+    background: var(--bg-1);
+    color: var(--text);
+    font-family: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Gökyüzü: iOS'te background-attachment: fixed sorunlu olduğu için sabit bir katman */
+  .sky {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(180deg, var(--bg-1), var(--bg-2) 55%, var(--bg-3));
+    overflow: hidden;
+  }
+  .star {
+    position: absolute;
+    border-radius: 50%;
+    background: #fff;
+    opacity: .5;
+    animation: twinkle 3.2s ease-in-out infinite alternate;
+  }
+  @keyframes twinkle { from { opacity: .12; } to { opacity: .75; } }
+  @media (prefers-reduced-motion: reduce) { .star { animation: none; } }
+
+  main {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: calc(env(safe-area-inset-top) + 20px) 16px calc(env(safe-area-inset-bottom) + 28px);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  h1, h2, h3, p { margin: 0; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .center { text-align: center; }
+
+  /* Başlık */
+  .top { display: flex; flex-direction: column; gap: 8px; padding: 4px 4px 0; }
+  .top-row { display: flex; justify-content: space-between; align-items: center; font-size: 15px; }
+  .moon { font-size: 26px; }
+  h1 { font-size: 34px; font-weight: 800; letter-spacing: -.5px; }
+  .pill {
+    align-self: flex-start;
+    background: var(--lavender);
+    color: var(--ink);
+    font-weight: 700;
+    font-size: 15px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Kart */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--stroke);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .card-head { display: flex; align-items: center; gap: 12px; }
+  .bubble {
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 19px;
+    background: color-mix(in srgb, var(--tint) 18%, transparent);
+  }
+  h2 { font-size: 17px; font-weight: 700; }
+  .card-head p { font-size: 13px; margin-top: 2px; }
+  h3 { font-size: 14px; font-weight: 600; color: var(--muted); }
+
+  /* Ders saati */
+  .time-input {
+    width: 100%;
+    min-height: 92px;
+    font: inherit;
+    font-size: 58px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    color: var(--text);
+    background: rgba(255, 255, 255, .05);
+    border: 1px solid var(--stroke);
+    border-radius: 22px;
+    padding: 8px 0;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .time-input::-webkit-date-and-time-value { text-align: center; }
+  .time-input:focus { outline: 2px solid var(--lavender); outline-offset: 2px; }
+
+  /* Zaman çizelgesi */
+  .timeline { list-style: none; margin: 0; padding: 0; position: relative; }
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 18px;
+    top: 24px;
+    bottom: 24px;
+    width: 2px;
+    background: rgba(255, 255, 255, .12);
+  }
+  .row { display: flex; align-items: center; gap: 14px; padding: 10px 0; position: relative; }
+  .dot {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 17px;
+    background: var(--tint);
+  }
+  .row.highlight .dot { box-shadow: 0 0 18px color-mix(in srgb, var(--tint) 70%, transparent); }
+  .row-text { flex: 1; min-width: 0; }
+  .row-title { font-weight: 650; font-size: 15px; }
+  .row-detail { font-size: 12.5px; color: var(--muted); margin-top: 1px; }
+  .row-time { text-align: right; font-variant-numeric: tabular-nums; }
+  .row-time b { display: block; font-size: 22px; font-weight: 700; }
+  .row.highlight .row-time b { font-size: 30px; color: var(--lavender); }
+  .row-time span { font-size: 12px; color: var(--muted); }
+  .row.past { opacity: .4; }
+
+  .note {
+    align-self: flex-start;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--butter);
+    background: color-mix(in srgb, var(--butter) 12%, transparent);
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+  }
+  .note:empty { display: none; }
+  .warn {
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--peach);
+    background: color-mix(in srgb, var(--peach) 12%, transparent);
+    padding: 12px 14px;
+    border-radius: 16px;
+  }
+
+  /* Butonlar */
+  .primary, .secondary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 54px;
+    border-radius: 999px;
+    font-weight: 750;
+    font-size: 17px;
+    text-decoration: none;
+    border: 0;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform .12s ease, opacity .2s ease;
+  }
+  .primary { background: var(--butter); color: var(--ink); }
+  .secondary { background: var(--sky); color: var(--ink); min-height: 46px; font-size: 15px; margin-top: 10px; }
+  .primary:active, .secondary:active { transform: scale(.97); }
+  .primary[aria-disabled="true"] { opacity: .35; pointer-events: none; }
+  .ghost, .link {
+    background: rgba(255, 255, 255, .08);
+    color: var(--text);
+    border: 0;
+    border-radius: 999px;
+    min-height: 44px;
+    font: inherit;
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  .link { background: none; color: var(--muted); text-decoration: underline; min-height: 40px; }
+
+  /* Seçim çipleri */
+  .chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .chip {
+    min-height: 40px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .07);
+    color: var(--text);
+    font: inherit;
+    font-weight: 650;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+  .chip[aria-pressed="true"] { background: var(--lavender); color: var(--ink); }
+
+  /* Anahtar (switch) */
+  .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
+  .switch-row b { display: block; font-size: 15px; font-weight: 600; }
+  .switch-row small { display: block; font-size: 12.5px; color: var(--muted); margin-top: 1px; }
+  .switch {
+    flex: none;
+    -webkit-appearance: none;
+    appearance: none;
+    width: 51px;
+    height: 31px;
+    margin: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .16);
+    position: relative;
+    cursor: pointer;
+    transition: background .2s ease;
+  }
+  .switch::before {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 27px;
+    height: 27px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform .2s ease;
+  }
+  .switch:checked { background: var(--lavender); }
+  .switch:checked::before { transform: translateX(20px); }
+
+  /* Kurulum */
+  .steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 14px; font-size: 15px; line-height: 1.45; }
+  .steps li::marker { color: var(--lavender); font-weight: 700; }
+  .kbd { display: inline-block; padding: 0 6px; border-radius: 6px; background: rgba(255, 255, 255, .12); }
+  details { margin-top: 10px; font-size: 14px; }
+  summary { color: var(--sky); cursor: pointer; font-weight: 600; }
+  .mini { margin: 10px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; color: var(--muted); }
+  .mini b { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="sky" id="sky" aria-hidden="true"></div>
+
+<main>
+  <header class="top">
+    <div class="top-row">
+      <span class="muted" id="greeting"></span>
+      <span class="moon" aria-hidden="true">🌙</span>
+    </div>
+    <h1>Uyku Planı</h1>
+    <p class="pill" id="bedPill">Yatış: --:--</p>
+  </header>
+
+  <!-- İlk kurulum: kurulum bitince gizlenir -->
+  <section class="card" id="setupCard" hidden>
+    <div class="card-head">
+      <span class="bubble" style="--tint: var(--sky)">✨</span>
+      <div>
+        <h2>İlk kurulum</h2>
+        <p class="muted">Sadece bir kez yapılır</p>
+      </div>
+    </div>
+    <ol class="steps">
+      <li id="stepHome">
+        <b>Ana ekrana ekle:</b> Safari'de <b>Paylaş</b> <span class="kbd">⬆︎</span> düğmesine dokun, <b>Ana Ekrana Ekle</b>'yi seç. Sonra siteyi ana ekrandaki simgeden aç.
+      </li>
+      <li>
+        <b>Alarm kestirmesini ekle:</b> <span id="shortcutStepText"></span>
+        <a class="secondary" id="addShortcutBtn" hidden>➕ Kestirmeyi ekle</a>
+        <details>
+          <summary>Kestirmeyi kendim kurayım</summary>
+          <ol class="mini">
+            <li><b>Kestirmeler</b> › <b>+</b> › adını <b id="recipeName"></b> yap.</li>
+            <li><b>Metni Böl</b> (Split Text) ekle. Girdisi: <b>Kestirme Girdisi</b>, ayırıcı: <b>Yeni Satırlar</b>.</li>
+            <li><b>Her Biri İçin Yinele</b> (Repeat with Each) ekle. Girdisi: <b>Bölünmüş Metin</b>.</li>
+            <li>Döngünün içine <b>Girdiden Tarihleri Al</b> (Get Dates from Input) ekle. Girdisi: <b>Yinelenen Öge</b>.</li>
+            <li>Onun altına, yine döngünün içine <b>Alarm Oluştur</b> (Create Alarm) ekle. Saat: <b>Tarihler</b>, etiket: <b>Uyku Planı 🌙</b>.</li>
+          </ol>
+        </details>
+      </li>
+    </ol>
+    <button class="ghost" id="setupDoneBtn" type="button">Kurulumu tamamladım ✓</button>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <span class="bubble" style="--tint: var(--peach)">📚</span>
+      <div>
+        <h2>Dersin kaçta?</h2>
+        <p class="muted" id="classDay"></p>
+      </div>
+    </div>
+    <input class="time-input" type="time" id="classTime" value="09:00" aria-label="Ders saati">
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <span class="bubble" style="--tint: var(--mint)">🗓️</span>
+      <div>
+        <h2>Bu gecenin planı</h2>
+        <p class="muted">Ders saatine göre hesaplandı</p>
+      </div>
+    </div>
+    <ol class="timeline" id="timeline"></ol>
+    <p class="note" id="countdown"></p>
+    <p class="warn" id="warning" hidden></p>
+    <a class="primary" id="alarmBtn" href="#">⏰ Alarmları kur</a>
+    <p class="muted small center" id="alarmHint"></p>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <span class="bubble" style="--tint: var(--lavender)">⚙️</span>
+      <div>
+        <h2>Ayarlar</h2>
+        <p class="muted">Bir kez seç, hep hatırlanır</p>
+      </div>
+    </div>
+    <h3>Kaç saat uyumak istiyorsun?</h3>
+    <div class="chips" id="sleepChips"></div>
+    <h3>Dersten kaç dakika önce uyanılsın?</h3>
+    <div class="chips" id="prepChips"></div>
+    <h3>Kurulacak alarmlar</h3>
+    <label class="switch-row">
+      <span><b>🔔 Ekranları bırak</b><small>Yatıştan 1,5 saat önce</small></span>
+      <input class="switch" type="checkbox" role="switch" id="windToggle">
+    </label>
+    <label class="switch-row">
+      <span><b>⏰ Uyanış</b><small>Sabah alarmı</small></span>
+      <input class="switch" type="checkbox" role="switch" id="wakeToggle">
+    </label>
+  </section>
+
+  <button class="link" id="showSetupBtn" type="button" hidden>Kurulum adımlarını göster</button>
+  <p class="muted small center">Tatlı rüyalar 💜</p>
+</main>
+
+<script>
+  // ---- Ayarlanabilir değerler ---------------------------------------------
+  const CONFIG = {
+    // Telefondaki kestirmenin adı. Kestirmeler'deki adla birebir aynı olmalı.
+    shortcutName: "Uyku Alarmları",
+    // Kestirmeyi paylaştıktan sonra iCloud linkini buraya yapıştır:
+    // örn. "https://www.icloud.com/shortcuts/abc123..."
+    shortcutICloudURL: "",
+    // Yatıştan önceki hazırlık süresi (dk).
+    windDownMinutes: 90,
+  };
+  const SLEEP_OPTIONS = [360, 390, 420, 450, 480, 510, 540, 570]; // 6 – 9,5 sa
+  const PREP_OPTIONS = [30, 45, 60, 90];
+
+  // ---- Kalıcı ayarlar (localStorage; erişilemezse varsayılanlarla çalışır) ---
+  const store = {
+    get(key, fallback) {
+      try {
+        const raw = localStorage.getItem("uyku." + key);
+        return raw === null ? fallback : JSON.parse(raw);
+      } catch { return fallback; }
+    },
+    set(key, value) {
+      try { localStorage.setItem("uyku." + key, JSON.stringify(value)); } catch {}
+    },
+  };
+
+  const state = {
+    classTime: store.get("classTime", "09:00"),
+    sleepMinutes: store.get("sleepMinutes", 480),
+    prepMinutes: store.get("prepMinutes", 60),
+    windAlarm: store.get("windAlarm", true),
+    wakeAlarm: store.get("wakeAlarm", true),
+    setupDone: store.get("setupDone", false),
+  };
+
+  function update(key, value) {
+    state[key] = value;
+    store.set(key, value);
+    render();
+  }
+
+  // ---- Hesaplama ----------------------------------------------------------
+  // Ders: girilen saatin bir sonraki gerçekleşmesi (geçtiyse yarın).
+  // Uyanış = Ders − hazırlanma, Yatış = Uyanış − uyku, Ekranları bırak = Yatış − 1,5 sa
+  function addMinutes(date, minutes) { return new Date(date.getTime() + minutes * 60000); }
+
+  function makePlan(now) {
+    const [h, m] = state.classTime.split(":").map(Number);
+    const lesson = new Date(now);
+    lesson.setHours(h, m, 0, 0);
+    if (lesson <= now) lesson.setDate(lesson.getDate() + 1);
+
+    const wake = addMinutes(lesson, -state.prepMinutes);
+    const bed = addMinutes(wake, -state.sleepMinutes);
+    const windDown = addMinutes(bed, -CONFIG.windDownMinutes);
+    return { lesson, wake, bed, windDown };
+  }
+
+  // ---- Biçimlendirme ------------------------------------------------------
+  const pad = (n) => String(n).padStart(2, "0");
+  const hhmm = (d) => pad(d.getHours()) + ":" + pad(d.getMinutes());
+
+  function durationText(minutes) {
+    const h = Math.floor(minutes / 60), m = minutes % 60;
+    if (h && m) return `${h} sa ${m} dk`;
+    return h ? `${h} sa` : `${m} dk`;
+  }
+
+  function hoursLabel(minutes) {
+    return (minutes / 60).toLocaleString("tr-TR", { maximumFractionDigits: 1 }) + " sa";
+  }
+
+  // "bu akşam", "bu gece", "yarın", "Çarşamba" gibi insan dostu gün etiketi
+  function dayLabel(date, now) {
+    const startOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const diff = Math.round((startOf(date) - startOf(now)) / 86400000);
+    const hour = date.getHours();
+    if (diff === 0) return hour >= 18 ? "bu akşam" : "bugün";
+    if (diff === 1) return hour < 5 ? "bu gece" : "yarın";
+    return date.toLocaleDateString("tr-TR", { weekday: "long" });
+  }
+
+  function greeting(now) {
+    const h = now.getHours();
+    if (h >= 5 && h < 12) return "Günaydın ☀️";
+    if (h >= 12 && h < 18) return "İyi günler 🌤️";
+    if (h >= 18 && h < 22) return "İyi akşamlar ✨";
+    return "İyi geceler 🌙";
+  }
+
+  // ---- Ekran --------------------------------------------------------------
+  const $ = (id) => document.getElementById(id);
+
+  function render() {
+    const now = new Date();
+    const plan = makePlan(now);
+
+    $("greeting").textContent = greeting(now);
+    $("bedPill").textContent = `Yatış: ${dayLabel(plan.bed, now)} ${hhmm(plan.bed)}`;
+    $("classDay").textContent = `Ders ${dayLabel(plan.lesson, now)} ${hhmm(plan.lesson)}`;
+    if ($("classTime").value !== state.classTime) $("classTime").value = state.classTime;
+
+    renderTimeline(plan, now);
+    renderStatus(plan, now);
+    renderAlarmButton(plan, now);
+    renderSettings();
+    renderSetup();
+  }
+
+  function renderTimeline(plan, now) {
+    const rows = [
+      { icon: "🔔", tint: "var(--butter)", title: "Ekranları bırak", detail: "Telefonu bırak, ışıkları kıs", date: plan.windDown },
+      { icon: "🛏️", tint: "var(--lavender)", title: "Yatış", detail: `${durationText(state.sleepMinutes)} uyku`, date: plan.bed, highlight: true },
+      { icon: "⏰", tint: "var(--peach)", title: "Uyanış", detail: `Dersten ${state.prepMinutes} dk önce`, date: plan.wake },
+      { icon: "📚", tint: "var(--sky)", title: "Ders", detail: "Başarılar! ✨", date: plan.lesson },
+    ];
+    $("timeline").innerHTML = rows.map((r) => `
+      <li class="row${r.highlight ? " highlight" : ""}${r.date <= now ? " past" : ""}" style="--tint: ${r.tint}">
+        <span class="dot" aria-hidden="true">${r.icon}</span>
+        <span class="row-text">
+          <span class="row-title">${r.title}</span>
+          <span class="row-detail" style="display:block">${r.detail}</span>
+        </span>
+        <span class="row-time"><b>${hhmm(r.date)}</b><span>${r.date <= now ? "geçti" : dayLabel(r.date, now)}</span></span>
+      </li>`).join("");
+  }
+
+  function renderStatus(plan, now) {
+    const minutesUntil = (d) => Math.ceil((d - now) / 60000);
+    let countdown = "";
+    let warning = "";
+
+    if (plan.windDown > now) {
+      countdown = `⏳ Ekranları bırakmaya ${durationText(minutesUntil(plan.windDown))} var`;
+    } else if (plan.bed > now) {
+      countdown = `⏳ Yatışa ${durationText(minutesUntil(plan.bed))} var`;
+      warning = "Ekranları bırakma saati geçti, o alarm kurulmayacak. Hemen hazırlanmaya başla 🌙";
+    } else if (plan.wake > now) {
+      warning = `Yatış saati geçti. Şimdi uyursan yaklaşık ${durationText(minutesUntil(plan.wake))} uyuyabilirsin 😴`;
+    } else {
+      warning = "Bu ders için uyanma saati geçmiş. Bir sonraki dersin saatini gir.";
+    }
+
+    $("countdown").textContent = countdown;
+    $("warning").textContent = warning;
+    $("warning").hidden = !warning;
+  }
+
+  // Sadece açık olan ve henüz geçmemiş alarmlar kestirmeye gönderilir.
+  function alarmsToSet(plan, now) {
+    const alarms = [];
+    if (state.windAlarm && plan.windDown > now) alarms.push(plan.windDown);
+    if (state.wakeAlarm && plan.wake > now) alarms.push(plan.wake);
+    return alarms;
+  }
+
+  function renderAlarmButton(plan, now) {
+    const alarms = alarmsToSet(plan, now);
+    const btn = $("alarmBtn");
+
+    if (alarms.length === 0) {
+      btn.setAttribute("aria-disabled", "true");
+      btn.removeAttribute("href");
+      $("alarmHint").textContent = "Kurulacak alarm yok.";
+      return;
+    }
+
+    // Kestirme girdisi: her satırda bir saat → "22:30\n08:00"
+    const text = alarms.map(hhmm).join("\n");
+    btn.href = "shortcuts://run-shortcut?name=" + encodeURIComponent(CONFIG.shortcutName)
+      + "&input=text&text=" + encodeURIComponent(text);
+    btn.removeAttribute("aria-disabled");
+    $("alarmHint").textContent = `Saat uygulamasına ${alarms.map(hhmm).join(" ve ")} alarmı eklenir.`;
+  }
+
+  function renderSettings() {
+    fillChips("sleepChips", SLEEP_OPTIONS, state.sleepMinutes, hoursLabel, (v) => update("sleepMinutes", v));
+    fillChips("prepChips", PREP_OPTIONS, state.prepMinutes, (v) => `${v} dk`, (v) => update("prepMinutes", v));
+    $("windToggle").checked = state.windAlarm;
+    $("wakeToggle").checked = state.wakeAlarm;
+  }
+
+  function fillChips(id, options, selected, label, onPick) {
+    const box = $(id);
+    box.replaceChildren(...options.map((value) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "chip";
+      chip.textContent = label(value);
+      chip.setAttribute("aria-pressed", String(value === selected));
+      chip.addEventListener("click", () => onPick(value));
+      return chip;
+    }));
+  }
+
+  function renderSetup() {
+    const standalone = window.navigator.standalone === true
+      || window.matchMedia("(display-mode: standalone)").matches;
+
+    $("setupCard").hidden = state.setupDone;
+    $("showSetupBtn").hidden = !state.setupDone;
+    $("stepHome").hidden = standalone;
+    $("recipeName").textContent = CONFIG.shortcutName;
+
+    const link = $("addShortcutBtn");
+    if (CONFIG.shortcutICloudURL) {
+      link.href = CONFIG.shortcutICloudURL;
+      link.hidden = false;
+      $("shortcutStepText").textContent = "Butona dokun, açılan ekranda Kestirme Ekle'ye bas. İlk alarm kurulumunda Saat uygulamasına izin ver.";
+    } else {
+      link.hidden = true;
+      $("shortcutStepText").textContent = `Kestirmeler'de "${CONFIG.shortcutName}" adında kısa bir kestirme kur (aşağıda tarifi var).`;
+    }
+  }
+
+  // ---- Olaylar ------------------------------------------------------------
+  $("classTime").addEventListener("input", (e) => {
+    if (/^\d{2}:\d{2}$/.test(e.target.value)) update("classTime", e.target.value);
+  });
+  $("windToggle").addEventListener("change", (e) => update("windAlarm", e.target.checked));
+  $("wakeToggle").addEventListener("change", (e) => update("wakeAlarm", e.target.checked));
+  $("setupDoneBtn").addEventListener("click", () => update("setupDone", true));
+  $("showSetupBtn").addEventListener("click", () => update("setupDone", false));
+
+  // Geri sayım ve "geçti" durumları için periyodik yenileme
+  setInterval(render, 30000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
+
+  // ---- Yıldızlar (sabit tohumlu, her açılışta aynı gökyüzü) ----------------
+  (function drawStars() {
+    const sky = $("sky");
+    const fract = (v) => v - Math.floor(v);
+    for (let i = 0; i < 46; i++) {
+      const star = document.createElement("span");
+      const size = 1 + fract(Math.sin(i * 3.7) * 9876.5) * 2;
+      star.className = "star";
+      star.style.left = (fract(Math.sin(i * 12.9898) * 43758.5453) * 100) + "%";
+      star.style.top = (fract(Math.sin(i * 78.233) * 12345.6789) * 70) + "%";
+      star.style.width = star.style.height = size + "px";
+      star.style.animationDelay = (-fract(Math.sin(i * 5.1) * 3456.7) * 3.2) + "s";
+      sky.appendChild(star);
+    }
+  })();
+
+  // ---- Çevrimdışı çalışma ----------------------------------------------
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+
+  render();
+</script>
+</body>
+</html>
